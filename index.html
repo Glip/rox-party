@@ -1,0 +1,985 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Распределение по группам</title>
+  <style>
+    :root {
+      --bg: #0f141b;
+      --panel: #1b2430;
+      --panel-2: #233044;
+      --text: #e6edf3;
+      --muted: #8fa3bf;
+      --accent: #4cc9f0;
+      --danger: #f28482;
+      --success: #90be6d;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Tahoma, sans-serif;
+      color: var(--text);
+      background: var(--bg);
+    }
+
+    .page {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    .header {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+
+    .title {
+      font-size: 22px;
+      font-weight: 600;
+      flex: 1;
+    }
+
+    .loader {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      background: var(--panel);
+      padding: 12px;
+      border-radius: 10px;
+      width: 100%;
+    }
+
+    .source-label {
+      flex: 1 1 100%;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    #sheetUrlInput {
+      flex: 1 1 auto;
+      min-width: 260px;
+      background: var(--panel-2);
+      color: var(--text);
+      border: 1px solid transparent;
+      padding: 8px 10px;
+      border-radius: 8px;
+      font-size: 13px;
+    }
+
+    #sheetUrlInput:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    .loader button {
+      border: none;
+      background: var(--accent);
+      color: #07202b;
+      padding: 10px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    .loader button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .control-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin-top: 12px;
+    }
+
+    .control-row input,
+    .control-row select {
+      background: var(--panel-2);
+      color: var(--text);
+      border: 1px solid transparent;
+      padding: 8px 10px;
+      border-radius: 8px;
+      font-size: 13px;
+      min-width: 220px;
+    }
+
+    .control-row input:focus,
+    .control-row select:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    .hint {
+      color: var(--muted);
+      font-size: 13px;
+      margin-top: 6px;
+    }
+
+    .board {
+      display: grid;
+      gap: 12px;
+      align-items: start;
+    }
+
+    .players-board {
+      grid-template-columns: 1fr;
+      margin-top: 16px;
+    }
+
+    .groups-board {
+      grid-template-columns: repeat(7, minmax(110px, 1fr));
+      margin-top: 16px;
+    }
+
+    .column {
+      background: var(--panel);
+      border-radius: 12px;
+      padding: 10px;
+      min-height: 120px;
+      border: 1px solid transparent;
+    }
+
+    .column.drag-over {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(76, 201, 240, 0.2);
+    }
+
+    .column-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+
+    .column-title {
+      font-weight: 600;
+      font-size: 15px;
+    }
+
+    .column-count {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .cards {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      min-height: 60px;
+    }
+
+    .cards.wrap {
+      flex-direction: row;
+      flex-wrap: wrap;
+    }
+
+    .card {
+      background: var(--panel-2);
+      border-radius: 8px;
+      padding: 6px 8px;
+      cursor: grab;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      border: 1px solid transparent;
+    }
+
+    .card:active {
+      cursor: grabbing;
+    }
+
+    .card.dragging {
+      opacity: 0.5;
+      border-color: var(--accent);
+    }
+
+    .card-info {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .card-name {
+      font-weight: 600;
+      font-size: 13px;
+    }
+
+    .card-meta {
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .card-icon {
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+    }
+
+    .card-icon img {
+      width: 22px;
+      height: 22px;
+      object-fit: contain;
+      display: block;
+    }
+
+    .status {
+      margin-top: 10px;
+      font-size: 13px;
+    }
+
+    .status.error { color: var(--danger); }
+    .status.success { color: var(--success); }
+
+    .controls {
+      margin: 16px 0 0;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .controls button {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--panel-2);
+      padding: 8px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+
+    .controls button:hover {
+      border-color: var(--accent);
+    }
+
+    .section-title {
+      margin-top: 18px;
+      font-weight: 600;
+      font-size: 16px;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="header">
+      <div class="title">Распределение по группам</div>
+    </div>
+
+    <div class="loader">
+      <div class="source-label">Ссылка на Google Sheets (можно вставить свою):</div>
+      <input id="sheetUrlInput" type="text" placeholder="https://docs.google.com/spreadsheets/d/.../edit#gid=..." />
+      <button id="loadBtn">Загрузить</button>
+    </div>
+    <div class="hint">
+      Таблица должна содержать столбцы: Имя, Уровень, Профессия. Лист должен быть опубликован (Доступ: все, у кого есть ссылка).
+    </div>
+    <div id="status" class="status"></div>
+
+    <div class="controls">
+      <button id="resetBtn">Сбросить распределение</button>
+    </div>
+
+    <div class="control-row">
+      <select id="sortSelect">
+        <option value="name-asc">Сортировка: имя (А-Я)</option>
+        <option value="name-desc">Сортировка: имя (Я-А)</option>
+        <option value="level-desc">Сортировка: уровень (сначала больше)</option>
+        <option value="level-asc">Сортировка: уровень (сначала меньше)</option>
+        <option value="profession-asc">Сортировка: профессия (А-Я)</option>
+        <option value="profession-desc">Сортировка: профессия (Я-А)</option>
+      </select>
+      <button id="sortBtn">Сортировать нераспределенных</button>
+    </div>
+
+    <div class="control-row">
+      <select id="loadSelect">
+        <option value="">Выберите набор групп</option>
+      </select>
+      <input id="saveNameInput" type="text" placeholder="Имя нового набора" />
+      <button id="saveBtn">Сохранить</button>
+      <button id="loadSavedBtn">Загрузить</button>
+      <button id="checkBtn">Проверить актуальность</button>
+      <button id="refreshSavesBtn">Обновить список</button>
+    </div>
+
+    <div class="section-title">Все игроки</div>
+    <div id="playersBoard" class="board players-board"></div>
+
+    <div class="section-title">Группы</div>
+    <div id="groupsBoard" class="board groups-board"></div>
+  </div>
+
+  <script>
+    // Конфигурация Google Sheets по ссылке
+    const DEFAULT_SHEET_HUMAN_URL =
+      "https://docs.google.com/spreadsheets/d/ID/edit#gid=GID";
+    const SHEET_URL_STORAGE_KEY = "rox-party-sheet-url";
+
+    // Ключ для локального хранилища наборов
+    const LOCAL_SAVES_KEY = "rox-party-group-saves";
+
+    const GROUP_SIZE = 5;
+    const GROUP_COUNT = 20;
+    const playersBoard = document.getElementById("playersBoard");
+    const groupsBoard = document.getElementById("groupsBoard");
+    const statusEl = document.getElementById("status");
+    const sheetUrlInput = document.getElementById("sheetUrlInput");
+    const loadBtn = document.getElementById("loadBtn");
+    const resetBtn = document.getElementById("resetBtn");
+    const sortSelect = document.getElementById("sortSelect");
+    const sortBtn = document.getElementById("sortBtn");
+    const saveBtn = document.getElementById("saveBtn");
+    const loadSelect = document.getElementById("loadSelect");
+    const loadSavedBtn = document.getElementById("loadSavedBtn");
+    const checkBtn = document.getElementById("checkBtn");
+    const refreshSavesBtn = document.getElementById("refreshSavesBtn");
+    const saveNameInput = document.getElementById("saveNameInput");
+
+    let people = [];
+    let rosterPeople = [];
+    let groups = [];
+    let lastSourceId = null;
+
+    const iconBase = "img/";
+    const professionIcons = {
+      "алхимик": "alchemist.png",
+      "ассасин": "assassin.png",
+      "убийца": "assassin.png",
+      "бард": "bard.png",
+      "кузнец": "blacksmith.png",
+      "крестоносец": "crusader.png",
+      "танцор": "dancer.png",
+      "охотник": "hunter.png",
+      "рыцарь": "knight.png",
+      "монах": "monk.png",
+      "монк": "monk.png",
+      "жрец": "priest.png",
+      "разбойник": "rogue.png",
+      "вор": "rogue.png",
+      "мудрец": "sage.png",
+      "волшебник": "wizard.png",
+      "верховный маг": "hw.png",
+      "сталкер": "stalker.png",
+      "лорд-рыцарь": "lk.png",
+      "верховный жрец": "hightpriest.png",
+      "белый кузнец": "whitesmith.png",
+      "ассасин кросс": "assassincross.png",
+      "паладин": "paladin.png",
+      "снайпер": "sniper.png",
+      "клоун": "clown.png",
+      "чемпион": "champion.png",
+      "профессор": "professor.png",
+      "цыганка": "gipsy.png",
+      "создатель": "creator.png",
+    };
+
+    function setStatus(message, type) {
+      statusEl.textContent = message || "";
+      statusEl.className = "status" + (type ? " " + type : "");
+    }
+
+    function normalize(text) {
+      return String(text || "").trim();
+    }
+
+    function normalizeKey(text) {
+      return normalize(text).toLowerCase();
+    }
+
+    function getProfessionIconPath(profession) {
+      const key = normalizeKey(profession);
+      const file = professionIcons[key];
+      return file ? iconBase + file : "";
+    }
+
+    function createCard(person) {
+      const card = document.createElement("div");
+      card.className = "card";
+      card.draggable = true;
+      card.dataset.personId = person.id;
+
+      const info = document.createElement("div");
+      info.className = "card-info";
+
+      const name = document.createElement("div");
+      name.className = "card-name";
+      name.textContent = person.name;
+
+      const meta = document.createElement("div");
+      meta.className = "card-meta";
+      meta.textContent = `${person.level} • ${person.profession}`;
+
+      const icon = document.createElement("div");
+      icon.className = "card-icon";
+      const iconPath = getProfessionIconPath(person.profession);
+      if (iconPath) {
+        const img = document.createElement("img");
+        img.src = iconPath;
+        img.alt = person.profession;
+        icon.appendChild(img);
+      } else {
+        icon.textContent = "?";
+      }
+
+      info.appendChild(name);
+      info.appendChild(meta);
+      card.appendChild(info);
+      card.appendChild(icon);
+
+      card.addEventListener("dragstart", (event) => {
+        card.classList.add("dragging");
+        event.dataTransfer.setData("text/plain", person.id);
+        lastSourceId = card.closest(".column").dataset.columnId;
+      });
+
+      card.addEventListener("dragend", () => {
+        card.classList.remove("dragging");
+      });
+
+      return card;
+    }
+
+    function createColumn(column) {
+      const wrapper = document.createElement("div");
+      wrapper.className = "column";
+      wrapper.dataset.columnId = column.id;
+
+      const header = document.createElement("div");
+      header.className = "column-header";
+
+      const title = document.createElement("div");
+      title.className = "column-title";
+      title.textContent = column.title;
+
+      const count = document.createElement("div");
+      count.className = "column-count";
+      count.textContent = `${column.people.length}/${column.capacity}`;
+      count.dataset.counterFor = column.id;
+
+      header.appendChild(title);
+      header.appendChild(count);
+
+      const list = document.createElement("div");
+      list.className = column.id === "unassigned" ? "cards wrap" : "cards";
+      list.dataset.listFor = column.id;
+
+      column.people.forEach(person => list.appendChild(createCard(person)));
+
+      wrapper.appendChild(header);
+      wrapper.appendChild(list);
+
+      wrapper.addEventListener("dragover", (event) => {
+        event.preventDefault();
+        wrapper.classList.add("drag-over");
+      });
+
+      wrapper.addEventListener("dragleave", () => {
+        wrapper.classList.remove("drag-over");
+      });
+
+      wrapper.addEventListener("drop", (event) => {
+        event.preventDefault();
+        wrapper.classList.remove("drag-over");
+        const personId = event.dataTransfer.getData("text/plain");
+        handleDrop(column.id, personId);
+      });
+
+      return wrapper;
+    }
+
+    function renderBoard() {
+      playersBoard.innerHTML = "";
+      groupsBoard.innerHTML = "";
+
+      const unassigned = groups.find(group => group.id === "unassigned");
+      if (unassigned) {
+        playersBoard.appendChild(createColumn(unassigned));
+      }
+
+      groups
+        .filter(group => group.id !== "unassigned")
+        .forEach(group => groupsBoard.appendChild(createColumn(group)));
+    }
+
+    function updateCounters() {
+      groups.forEach(group => {
+        const countEl = document.querySelector(`[data-counter-for="${group.id}"]`);
+        if (countEl) {
+          countEl.textContent = `${group.people.length}/${group.capacity}`;
+        }
+      });
+    }
+
+    function findGroupById(groupId) {
+      return groups.find(group => group.id === groupId);
+    }
+
+    function findGroupContaining(personId) {
+      return groups.find(group => group.people.some(person => person.id === personId));
+    }
+
+    function handleDrop(targetGroupId, personId) {
+      const sourceGroup = findGroupById(lastSourceId) || findGroupContaining(personId);
+      const targetGroup = findGroupById(targetGroupId);
+      if (!targetGroup || !personId) return;
+
+      if (targetGroup.people.length >= targetGroup.capacity) {
+        setStatus("В этой группе уже 5 человек.", "error");
+        return;
+      }
+
+      const personIndex = sourceGroup ? sourceGroup.people.findIndex(p => p.id === personId) : -1;
+      let person;
+      if (personIndex >= 0) {
+        person = sourceGroup.people.splice(personIndex, 1)[0];
+      } else {
+        person = people.find(p => p.id === personId);
+      }
+
+      if (!person) return;
+      targetGroup.people.push(person);
+      renderBoard();
+      updateCounters();
+      setStatus("", "");
+    }
+
+    function resetGroups() {
+      groups.forEach(group => {
+        if (group.id === "unassigned") {
+          group.people = [...people];
+        } else {
+          group.people = [];
+        }
+      });
+      renderBoard();
+      updateCounters();
+    }
+
+    function buildGroups() {
+      const nextGroups = [];
+
+      nextGroups.push({
+        id: "unassigned",
+        title: "Не распределены",
+        capacity: people.length,
+        people: [...people]
+      });
+
+      for (let i = 0; i < GROUP_COUNT; i += 1) {
+        nextGroups.push({
+          id: `group-${i + 1}`,
+          title: `Группа ${i + 1}`,
+          capacity: GROUP_SIZE,
+          people: []
+        });
+      }
+
+      groups = nextGroups;
+      renderBoard();
+    }
+
+    function rebuildGroupStructure(sourceGroups) {
+      const normalized = [];
+      const peopleFromGroups = [];
+      const rosterReady = rosterPeople.length > 0;
+
+      const unassigned = sourceGroups?.find(group => group.id === "unassigned");
+      normalized.push({
+        id: "unassigned",
+        title: "Не распределены",
+        capacity: 0,
+        people: unassigned?.people ? [...unassigned.people] : []
+      });
+
+      for (let i = 0; i < GROUP_COUNT; i += 1) {
+        const id = `group-${i + 1}`;
+        const saved = sourceGroups?.find(group => group.id === id);
+        normalized.push({
+          id,
+          title: `Группа ${i + 1}`,
+          capacity: GROUP_SIZE,
+          people: saved?.people ? [...saved.people] : []
+        });
+      }
+
+      normalized.forEach(group => {
+        group.people.forEach(person => {
+          if (!peopleFromGroups.some(item => item.id === person.id)) {
+            peopleFromGroups.push(person);
+          }
+        });
+      });
+
+      if (rosterReady) {
+        people = rosterPeople;
+      } else {
+        people = peopleFromGroups.length ? peopleFromGroups : people;
+      }
+      normalized[0].capacity = normalized[0].people.length;
+      groups = normalized;
+    }
+
+    function mapRowsToPeople(table) {
+      if (!table || !table.cols || !table.rows) return [];
+
+      const headers = table.cols.map(col => normalizeKey(col.label));
+      const nameIndex = getIndex(headers, "имя", 0);
+      const levelIndex = getIndex(headers, "уров", 1);
+      const profIndex = getIndex(headers, "проф", 2);
+
+      return table.rows
+        .map((row, index) => {
+          const cells = row.c || [];
+          const name = normalize(cells[nameIndex]?.v || cells[0]?.v);
+          const level = normalize(cells[levelIndex]?.v || cells[1]?.v);
+          const profession = normalize(cells[profIndex]?.v || cells[2]?.v);
+
+          if (!name) return null;
+          return {
+            id: `person-${index}-${name.replace(/\s+/g, "-")}`,
+            name,
+            level: level || "—",
+            profession: profession || "—"
+          };
+        })
+        .filter(Boolean);
+    }
+
+    function getIndex(headers, match, fallback) {
+      const index = headers.findIndex(header => header.includes(match));
+      return index >= 0 ? index : fallback;
+    }
+
+    function buildGvizUrlFromHumanUrl(url) {
+      const value = normalize(url);
+      if (!value) return null;
+      try {
+        const u = new URL(value);
+        const parts = u.pathname.split("/").filter(Boolean);
+        const dIndex = parts.indexOf("d");
+        if (dIndex === -1 || dIndex + 1 >= parts.length) return null;
+        const sheetId = parts[dIndex + 1];
+        const gid = u.searchParams.get("gid") || "0";
+        return `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&gid=${gid}`;
+      } catch {
+        return null;
+      }
+    }
+
+    async function fetchSheet() {
+      const rawUrl = sheetUrlInput ? sheetUrlInput.value : "";
+      const humanUrl = normalize(rawUrl) || DEFAULT_SHEET_HUMAN_URL;
+      const gvizUrl = buildGvizUrlFromHumanUrl(humanUrl);
+      if (!gvizUrl) {
+        throw new Error("Некорректная ссылка на Google Sheets.");
+      }
+
+      const response = await fetch(gvizUrl);
+      if (!response.ok) {
+        throw new Error("Не удалось загрузить таблицу.");
+      }
+      const text = await response.text();
+      const start = text.indexOf("{");
+      const end = text.lastIndexOf("}");
+      if (start === -1 || end === -1) {
+        throw new Error("Таблица вернула некорректный ответ.");
+      }
+      const jsonText = text.slice(start, end + 1);
+      return JSON.parse(jsonText);
+    }
+
+    async function loadFromSheet() {
+      loadBtn.disabled = true;
+      setStatus("Загружаю данные из Google Sheets...", "");
+      try {
+        const currentHumanUrl = normalize(sheetUrlInput ? sheetUrlInput.value : "");
+        if (currentHumanUrl) {
+          try {
+            localStorage.setItem(SHEET_URL_STORAGE_KEY, currentHumanUrl);
+          } catch {
+            // игнорируем невозможность сохранения
+          }
+        }
+
+        const json = await fetchSheet();
+        if (!json || !json.table) {
+          throw new Error("Таблица недоступна. Убедитесь, что она опубликована.");
+        }
+
+        rosterPeople = mapRowsToPeople(json.table);
+        people = rosterPeople;
+        if (!people.length) {
+          throw new Error("В таблице нет данных.");
+        }
+
+        buildGroups();
+        setStatus(`Загружено ${people.length} участников.`, "success");
+      } catch (error) {
+        setStatus(error.message || "Ошибка загрузки.", "error");
+      } finally {
+        loadBtn.disabled = false;
+      }
+    }
+
+    function serializeGroups() {
+      return groups.map(group => ({
+        id: group.id,
+        title: group.title,
+        people: group.people.map(person => ({
+          id: person.id,
+          name: person.name,
+          level: person.level,
+          profession: person.profession
+        }))
+      }));
+    }
+
+    function normalizePersonKey(name) {
+      return normalizeKey(name);
+    }
+
+    function checkRosterActuality(removeMissing = false) {
+      if (!rosterPeople.length) {
+        setStatus("Сначала загрузите актуальный список из таблицы.", "error");
+        return;
+      }
+
+      const rosterKeys = new Set(rosterPeople.map(person => normalizePersonKey(person.name)));
+      const rosterMap = new Map(
+        rosterPeople.map(person => [normalizePersonKey(person.name), person])
+      );
+      const missing = [];
+      const currentKeys = new Set();
+
+      groups.forEach(group => {
+        group.people = group.people.filter(person => {
+          const key = normalizePersonKey(person.name);
+          currentKeys.add(key);
+          if (!rosterKeys.has(key)) {
+            missing.push(person.name);
+            return !removeMissing;
+          }
+          const rosterPerson = rosterMap.get(key);
+          if (rosterPerson) {
+            person.name = rosterPerson.name;
+            person.level = rosterPerson.level;
+            person.profession = rosterPerson.profession;
+          }
+          return true;
+        });
+      });
+
+      const unassigned = groups.find(group => group.id === "unassigned");
+      const added = [];
+      if (unassigned) {
+        rosterPeople.forEach(person => {
+          const key = normalizePersonKey(person.name);
+          if (!currentKeys.has(key)) {
+            unassigned.people.push(person);
+            currentKeys.add(key);
+            added.push(person.name);
+          }
+        });
+        unassigned.capacity = unassigned.people.length;
+      }
+
+      if (!missing.length) {
+        if (!added.length) {
+          setStatus("Все персонажи из набора есть в актуальном списке.", "success");
+          return;
+        }
+      }
+
+      if (removeMissing) {
+        renderBoard();
+        updateCounters();
+      }
+
+      const uniqueMissing = Array.from(new Set(missing));
+      const uniqueAdded = Array.from(new Set(added));
+      const missingPreview = uniqueMissing.slice(0, 6).join(", ");
+      const missingSuffix = uniqueMissing.length > 6 ? ` и еще ${uniqueMissing.length - 6}` : "";
+      const addedPreview = uniqueAdded.slice(0, 6).join(", ");
+      const addedSuffix = uniqueAdded.length > 6 ? ` и еще ${uniqueAdded.length - 6}` : "";
+
+      if (uniqueMissing.length && uniqueAdded.length) {
+        setStatus(
+          `Удалены: ${missingPreview}${missingSuffix}. Добавлены: ${addedPreview}${addedSuffix}.`,
+          "error"
+        );
+      } else if (uniqueMissing.length) {
+        const prefix = removeMissing ? "Удалены из набора: " : "Нет в актуальном списке: ";
+        setStatus(`${prefix}${missingPreview}${missingSuffix}`, "error");
+      } else if (uniqueAdded.length) {
+        setStatus(`Добавлены в "Не распределены": ${addedPreview}${addedSuffix}`, "success");
+      }
+    }
+
+    function compareStrings(a, b, direction = 1) {
+      return a.localeCompare(b, "ru", { sensitivity: "base" }) * direction;
+    }
+
+    function parseLevel(value) {
+      const number = Number(String(value).replace(/[^\d.]/g, ""));
+      return Number.isFinite(number) ? number : 0;
+    }
+
+    function sortUnassigned() {
+      const unassigned = groups.find(group => group.id === "unassigned");
+      if (!unassigned) return;
+
+      const [field, dir] = sortSelect.value.split("-");
+      const direction = dir === "desc" ? -1 : 1;
+
+      unassigned.people.sort((a, b) => {
+        if (field === "level") {
+          const diff = (parseLevel(a.level) - parseLevel(b.level)) * direction;
+          if (diff !== 0) return diff;
+          return compareStrings(a.name, b.name, 1);
+        }
+        if (field === "profession") {
+          const diff = compareStrings(a.profession, b.profession, direction);
+          if (diff !== 0) return diff;
+          return compareStrings(a.name, b.name, 1);
+        }
+        return compareStrings(a.name, b.name, direction);
+      });
+
+      renderBoard();
+      updateCounters();
+    }
+
+    // ===== Локальное хранилище наборов (замена api.php) =====
+
+    function readLocalSaves() {
+      try {
+        const raw = localStorage.getItem(LOCAL_SAVES_KEY);
+        if (!raw) return [];
+        const data = JSON.parse(raw);
+        return Array.isArray(data) ? data : [];
+      } catch {
+        return [];
+      }
+    }
+
+    function writeLocalSaves(saves) {
+      try {
+        localStorage.setItem(LOCAL_SAVES_KEY, JSON.stringify(saves));
+      } catch {
+        // Игнорируем ошибки записи (например, переполнено хранилище)
+      }
+    }
+
+    async function fetchSavedSets() {
+      const saves = readLocalSaves();
+      loadSelect.innerHTML = '<option value="">Выберите набор групп</option>';
+      saves.forEach(item => {
+        const option = document.createElement("option");
+        option.value = item.name;
+        const updated = item.updatedAt ? ` (${item.updatedAt})` : "";
+        option.textContent = item.name + updated;
+        loadSelect.appendChild(option);
+      });
+    }
+
+    async function saveGroups() {
+      const rawName = saveNameInput ? saveNameInput.value : "";
+      const name = normalize(rawName || loadSelect.value);
+      if (!name) {
+        setStatus("Введите имя набора или выберите существующий.", "error");
+        return;
+      }
+
+      saveBtn.disabled = true;
+      setStatus("Сохраняю набор локально...", "");
+      try {
+        const saves = readLocalSaves();
+        const groupsData = serializeGroups();
+        const now = new Date().toISOString();
+        const existingIndex = saves.findIndex(item => item.name === name);
+        const record = { name, updatedAt: now, groups: groupsData };
+
+        if (existingIndex >= 0) {
+          saves[existingIndex] = record;
+        } else {
+          saves.push(record);
+        }
+
+        writeLocalSaves(saves);
+        if (loadSelect) {
+          loadSelect.value = name;
+        }
+        setStatus("Набор сохранен в этом браузере.", "success");
+        await fetchSavedSets();
+      } catch (error) {
+        setStatus(error.message || "Ошибка сохранения.", "error");
+      } finally {
+        saveBtn.disabled = false;
+      }
+    }
+
+    async function loadSavedGroups() {
+      const name = loadSelect.value;
+      if (!name) {
+        setStatus("Выберите набор для загрузки.", "error");
+        return;
+      }
+
+      loadSavedBtn.disabled = true;
+      setStatus("Загружаю набор из локального хранилища...", "");
+      try {
+        const saves = readLocalSaves();
+        const found = saves.find(item => item.name === name);
+        if (!found) {
+          throw new Error("Набор не найден в хранилище.");
+        }
+        rebuildGroupStructure(found.groups);
+        renderBoard();
+        updateCounters();
+        setStatus("Набор загружен.", "success");
+      } catch (error) {
+        setStatus(error.message || "Ошибка загрузки.", "error");
+      } finally {
+        loadSavedBtn.disabled = false;
+      }
+    }
+
+    loadBtn.addEventListener("click", loadFromSheet);
+    resetBtn.addEventListener("click", resetGroups);
+    sortBtn.addEventListener("click", sortUnassigned);
+    saveBtn.addEventListener("click", saveGroups);
+    loadSavedBtn.addEventListener("click", loadSavedGroups);
+    checkBtn.addEventListener("click", () => checkRosterActuality(true));
+    refreshSavesBtn.addEventListener("click", fetchSavedSets);
+
+    // Автоинициализация при открытии страницы
+    (function init() {
+      try {
+        const savedHumanUrl = localStorage.getItem(SHEET_URL_STORAGE_KEY);
+        if (sheetUrlInput) {
+          sheetUrlInput.value = savedHumanUrl || DEFAULT_SHEET_HUMAN_URL;
+        }
+      } catch {
+        if (sheetUrlInput) {
+          sheetUrlInput.value = DEFAULT_SHEET_HUMAN_URL;
+        }
+      }
+
+      fetchSavedSets();
+      loadFromSheet();
+    }());
+  </script>
+</body>
+</html>
+
